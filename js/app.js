@@ -12,6 +12,37 @@
     notes: ""
   };
 
+  // draggable gutters
+  (function () {
+    const view = $('tab-viewer'), cmp = $('tab-compare');
+    document.querySelectorAll('.gutter').forEach(g => {
+      g.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); g.setPointerCapture(e.pointerId);
+        g.classList.add('drag'); document.body.classList.add('dragging', g.classList.contains('v') ? 'cv' : 'ch');
+        const prev = g.previousElementSibling, next = g.nextElementSibling;
+        const pr = prev.getBoundingClientRect(), nr = next.getBoundingClientRect();
+        const horiz = g.classList.contains('v'), start = horiz ? e.clientX : e.clientY;
+        const move = (ev) => {
+          const d = (horiz ? ev.clientX : ev.clientY) - start;
+          if (horiz) {
+            const total = pr.width + nr.width, a = Math.min(total - 160, Math.max(160, pr.width + d));
+            const i = +g.dataset.g; // 0: panels 0|1, 1: panels 1|2
+            view.style.setProperty('--c' + i, a + 'fr');
+            view.style.setProperty('--c' + (i + 1), (total - a) + 'fr');
+          } else {
+            cmp.style.setProperty('--r0', Math.max(120, pr.height + d) + 'px');
+          }
+        };
+        const up = () => { g.classList.remove('drag'); document.body.classList.remove('dragging', 'cv', 'ch'); g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); };
+        g.addEventListener('pointermove', move); g.addEventListener('pointerup', up);
+      });
+      g.addEventListener('dblclick', () => { // reset
+        const horiz = g.classList.contains('v');
+        if (horiz) ['--c0', '--c1', '--c2'].forEach(v => $('tab-viewer').style.removeProperty(v)); else $('tab-compare').style.removeProperty('--r0');
+      });
+    });
+  })();
+
   // theme
   const root = document.documentElement;
   const saved = localStorage.getItem('jr-theme');
@@ -118,7 +149,7 @@
     A.value = r.value;
     draw();
     const s = Insights.analyze(r.value, A.text.value);
-    $('insightsOut').innerHTML = (r.envelope ? envelopeHtml(r.envelope) : '') + Uniclient.render(Uniclient.analyze(r.value)) + '<h3>General structure</h3>' + Insights.render(s, r.value);
+    $('insightsOut').innerHTML = (r.envelope ? envelopeHtml(r.envelope) : '') + Uniclient.render(Uniclient.analyze(r.value)) + '<details class="sec"><summary>General structure</summary><div style="padding:0 10px 10px">' + Insights.render(s, r.value) + '</div></details>';
     $('insightsOut').querySelectorAll('.path').forEach(td => td.onclick = () => {
       A.selected = JSON.parse(td.dataset.path); locate(A.selected);
     });
@@ -168,6 +199,8 @@
     const f = c.dataset.filter;
     c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
     document.querySelectorAll('#quickTable tbody tr').forEach(tr => tr.hidden = f !== 'all' && tr.dataset.cat !== f);
+    const cg = $('copyGroup'), v = c.dataset.vals || '';
+    cg.dataset.copy = v; cg.textContent = 'copy all' + (f === 'all' ? '' : ' ' + c.textContent.replace(/\s*\d+$/, '').toLowerCase() + 's') + ' (' + (v ? v.split('\n').length : 0) + ')';
   });
   // copy buttons in Insights (event delegation; works after re-render)
   $('insightsOut').addEventListener('click', (e) => {

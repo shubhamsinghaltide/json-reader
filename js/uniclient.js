@@ -82,7 +82,7 @@
   }
 
   const P = (p) => `<span class="path" data-path='${esc(JSON.stringify(p))}'>${esc(pathStr(p))}</span>`;
-  const CP = (txt, label) => `<button class="cp" data-copy="${esc(txt)}" title="Copy">${label || 'copy'}</button>`;
+  const CP = (txt, label, tip) => `<button class="cp" data-copy="${esc(txt)}" title="${tip || 'Copy value'}">${label || 'copy'}</button>`;
   const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
   const ago = (d) => { const m = Math.round((d - Date.now()) / 60000), a = Math.abs(m); const u = a >= 1440 ? Math.round(a / 1440) + 'd' : a >= 60 ? Math.round(a / 60) + 'h' : a + 'm'; return m < 0 ? u + ' ago' : 'in ' + u; };
 
@@ -100,12 +100,15 @@
         if (cat === 'colors') shown = `<span class="swatch" style="background:${esc(v)}"></span> <code>${esc(v)}</code>`;
         if (cat === 'dates') shown = `<code>${esc(v)}</code><div class="muted">${ago(Date.parse(v))}</div>`;
         if (cat === 'urls') shown = `<a class="url" href="${esc(v)}" target="_blank" rel="noopener">${esc(short(v, 70))}</a>`;
-        rows.push(`<tr data-cat="${cat}"><td><span class="tag t-${cat}">${label}</span></td><td class="val">${shown}${e.count > 1 ? ` <span class="muted">×${e.count}</span>` : ''}</td><td class="pth">${P(e.paths[0])}</td><td class="act">${CP(v)}${CP(pathStr(e.paths[0]), '$')}</td></tr>`);
+        rows.push(`<tr data-cat="${cat}"><td><span class="tag t-${cat}">${label}</span></td><td class="val">${shown}${e.count > 1 ? ` <span class="muted">×${e.count}</span>` : ''}</td><td class="pth">${P(e.paths[0])}</td><td class="act">${CP(v)}${CP(pathStr(e.paths[0]), 'path', 'Copy JSON path: ' + pathStr(e.paths[0]))}</td></tr>`);
       });
     });
     if (!rows.length) return '';
-    const chips = `<div class="chips"><button class="chip on" data-filter="all">All ${rows.length}</button>` +
-      G.filter(([c]) => counts[c]).map(([c, l]) => `<button class="chip" data-filter="${c}">${l} ${counts[c]}</button>`).join('') + '</div>';
+    const vals = {}; let allVals = [];
+    G.forEach(([c]) => { if (r.facts[c]) { vals[c] = [...r.facts[c].keys()]; allVals = allVals.concat(vals[c]); } });
+    const chips = `<div class="chips"><button class="chip on" data-filter="all" data-vals="${esc(allVals.join('\n'))}">All ${allVals.length}</button>` +
+      G.filter(([c]) => counts[c]).map(([c, l]) => `<button class="chip" data-filter="${c}" data-vals="${esc(vals[c].join('\n'))}">${l} ${counts[c]}</button>`).join('') +
+      `<button class="cp chip-copy" id="copyGroup" data-copy="${esc(allVals.join('\n'))}" title="Copy every value in the selected type">copy all (${allVals.length})</button></div>`;
     const table = `<div class="tw"><table class="ut" id="quickTable"><thead><tr><th>Type</th><th>Value</th><th>Path</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
     return sec('Quick copy', rows.length, chips + table, true);
   }
