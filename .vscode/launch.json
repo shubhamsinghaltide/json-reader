@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "JSON Reader (Chrome)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:8000/index.html",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "serve: static site"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON Reader & Diff</title>
+<meta name="theme-color" content="#4f46e5">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="assets/favicon.svg" alt="" width="24" height="24"> JSON Reader &amp; Diff</div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="viewer">Reader</button>
+    <button class="tab" data-tab="compare">Compare</button>
+  </nav>
+  <button id="themeBtn" class="btn ghost" title="Toggle theme">Theme</button>
+</header>
+
+<!-- ============ READER ============ -->
+<main id="tab-viewer" class="tabpane active">
+  <section class="panel" id="panelInput">
+    <div class="panel-head">
+      <h2>Input</h2>
+      <div class="actions">
+        <label class="btn">Open file<input type="file" id="fileA" accept=".json,.txt,application/json" hidden></label>
+        <label class="chk" title="For network responses shaped {data, links, meta}: show only the data object"><input type="checkbox" id="unwrapData"> data only</label>
+        <button class="btn" id="formatBtn">Format</button>
+        <button class="btn" id="minifyBtn">Minify</button>
+        <button class="btn" id="sampleBtn">Sample</button>
+        <button class="btn" id="clearBtn">Clear</button>
+        <button class="btn icon expand" data-expand="panelInput" title="Expand to full width">⤢</button>
+      </div>
+    </div>
+    <textarea id="inputA" spellcheck="false" placeholder="Paste JSON here, or drop a .json file anywhere on this panel…"></textarea>
+    <div id="errA" class="status"></div>
+  </section>
+
+  <section class="panel" id="panelTree">
+    <div class="panel-head">
+      <h2>Explorer</h2>
+      <div class="actions">
+        <div class="seg" id="viewMode">
+          <button data-mode="tree" class="on">Tree</button>
+          <button data-mode="table">Table</button>
+          <button data-mode="raw">Raw</button>
+          <button data-mode="dart" title="Generate freezed models">Dart</button>
+        </div>
+        <input type="search" id="search" placeholder="Search keys / values…">
+        <button class="btn" id="expandAll">Expand all</button>
+        <button class="btn" id="collapseAll">Collapse</button>
+        <button class="btn icon expand" data-expand="panelTree" title="Expand to full width">⤢</button>
+      </div>
+    </div>
+    <div id="pathBar" class="pathbar" title="Click a node to see its path; click here to copy">$</div>
+    <div id="treeOut" class="out"></div>
+  </section>
+
+  <section class="panel" id="panelInsights">
+    <div class="panel-head">
+      <h2>Insights</h2>
+      <div class="actions"><button class="btn icon expand" data-expand="panelInsights" title="Expand to full width">⤢</button></div>
+    </div>
+    <div id="insightsOut" class="out insights"><p class="muted">Paste JSON to see insights.</p></div>
+  </section>
+</main>
+
+<!-- ============ COMPARE ============ -->
+<main id="tab-compare" class="tabpane">
+  <section class="panel wide-top" id="panelCmpIn">
+    <div class="panel-head">
+      <h2>Compare two JSON documents</h2>
+      <div class="actions">
+        <label class="chk"><input type="checkbox" id="optSort"> Ignore key order</label>
+        <label class="chk"><input type="checkbox" id="optChangedOnly"> Changed lines only</label>
+        <button class="btn primary" id="diffBtn">Compare</button>
+        <button class="btn" id="swapBtn">Swap</button>
+        <button class="btn icon expand" data-expand="panelCmpIn" title="Expand to full width">⤢</button>
+      </div>
+    </div>
+    <div class="two">
+      <div class="col">
+        <div class="col-head">Left (original)
+          <label class="btn small">File<input type="file" id="fileL" accept=".json,.txt" hidden></label></div>
+        <textarea id="inputL" spellcheck="false" placeholder="Left JSON…"></textarea>
+        <div id="errL" class="status"></div>
+      </div>
+      <div class="col">
+        <div class="col-head">Right (changed)
+          <label class="btn small">File<input type="file" id="fileR" accept=".json,.txt" hidden></label></div>
+        <textarea id="inputR" spellcheck="false" placeholder="Right JSON…"></textarea>
+        <div id="errR" class="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel wide-top" id="panelDiff">
+    <div class="panel-head">
+      <h2>Differences <span id="diffSummary" class="summary"></span></h2>
+      <div class="actions">
+        <button class="btn" id="prevDiff">↑ Prev</button>
+        <button class="btn" id="nextDiff">↓ Next</button>
+        <button class="btn icon expand" data-expand="panelDiff" title="Expand to full width">⤢</button>
+      </div>
+    </div>
+    <div id="diffOut" class="out diff"><p class="muted">Add two JSON documents and press Compare.</p></div>
+  </section>
+</main>
+
+<script src="js/insights.js"></script>
+<script src="js/tree.js"></script>
+<script src="js/uniclient.js"></script>
+<script src="js/diff.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

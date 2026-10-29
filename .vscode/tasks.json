@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "serve: static site",
+      "type": "shell",
+      "command": "sh",
+      "args": ["${workspaceFolder}/scripts/serve.sh", "8000", "${workspaceFolder}"],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^Serving HTTP",
+          "endsPattern": "^Serving HTTP"
+        }
+      }
+    }
+  ]
+}
