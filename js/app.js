@@ -92,23 +92,32 @@
       if (envelope) t = envelope.body;
     }
     if (!t) return { error: 'Network response has an empty BODY', envelope };
-    try {
-      let value = JSON.parse(t);
-      if (envelope && opts.unwrap !== false && bodyOnly() && value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) value = value.data;
-      return { value, envelope };
-    }
+    let value, fixes = [];
+    try { value = JSON.parse(t); }
     catch (e) {
-      let msg = e.message, m = /position (\d+)/.exec(msg);
-      if (m && !/line \d+/.test(msg)) { const pos = +m[1], before = t.slice(0, pos).split('\n'); msg += ` (line ${before.length}, col ${before[before.length - 1].length + 1})`; }
-      return { error: msg, envelope };
+      const rep = JsonRepair.repair(t);
+      if (!rep) {
+        let msg = e.message, m = /position (\d+)/.exec(msg);
+        if (m && !/line \d+/.test(msg)) { const pos = +m[1], before = t.slice(0, pos).split('\n'); msg += ` (line ${before.length}, col ${before[before.length - 1].length + 1})`; }
+        return { error: msg, envelope };
+      }
+      value = JSON.parse(rep.text); fixes = rep.fixes;
     }
+    if (envelope && opts.unwrap !== false && bodyOnly() && value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) value = value.data;
+    return { value, envelope, fixes };
   }
   // Pretty-printed JSON as the Reader's Format button produces it. Accepts raw JSON or a network dump (uses its BODY).
-  // Ignores the data-only option so the whole document is kept. Optionally sorts lists first. Returns null if invalid or empty.
+  // Ignores the data-only option so the whole document is kept. Optionally sorts lists first.
+  // Returns { text, fixes } (fixes lists any auto-corrections) or null if invalid or empty.
   function formatText(text, sort = false) {
     const r = parse(text, { unwrap: false });
     if (r.value === undefined) return null;
-    return JSON.stringify(sort ? JsonDiff.sortLists(r.value) : r.value, null, 2);
+    return { text: JSON.stringify(sort ? JsonDiff.sortLists(r.value) : r.value, null, 2), fixes: r.fixes };
+  }
+  // One persistent toast per panel listing what was auto-corrected and where. It is only closed by its own close button.
+  function reportFixes(key, label, fixes) {
+    if (!fixes || !fixes.length) return;
+    Toast.show(key, `Auto-corrected ${fixes.length} issue${fixes.length > 1 ? 's' : ''} in ${label}`, fixes.map(f => `Line ${f.line}, col ${f.col}: ${f.message}`));
   }
   function envelopeHtml(env) {
     const h = env.headers || {};
@@ -153,7 +162,9 @@
   const A = { text: $('inputA'), value: undefined, mode: 'tree', selected: null, expandAll: false };
   function renderReader() {
     const r = parse(A.text.value);
-    setStatus($('errA'), r, r.value !== undefined ? (r.envelope ? ' · body extracted from network response' + (r.envelope.status ? ' (HTTP ' + r.envelope.status + ')' : '') : ` · ${new Blob([A.text.value]).size} bytes`) : '');
+    const fixNote = r.fixes && r.fixes.length ? ` · auto-corrected ${r.fixes.length} issue${r.fixes.length > 1 ? 's' : ''}` : '';
+    setStatus($('errA'), r, r.value !== undefined ? (r.envelope ? ' · body extracted from network response' + (r.envelope.status ? ' (HTTP ' + r.envelope.status + ')' : '') : ` · ${new Blob([A.text.value]).size} bytes`) + fixNote : '');
+    reportFixes('reader', 'Reader input', r.fixes);
     if (r.value === undefined) {
       A.value = undefined;
       $('treeOut').textContent = ''; $('insightsOut').innerHTML = '<p class="muted">Paste JSON to see insights.</p>'; return;
@@ -235,8 +246,8 @@
   let tmr; A.text.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(renderReader, 250); });
   $('search').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(draw, 200); });
   $('unwrapData').onchange = renderReader;
-  $('formatBtn').onclick = () => { const f = formatText(A.text.value); if (f !== null) { A.text.value = f; renderReader(); } };
-  $('copyFmtBtn').onclick = (e) => { const f = formatText(A.text.value); if (f !== null) copyText(f, e.currentTarget); };
+  $('formatBtn').onclick = () => { const f = formatText(A.text.value); if (f !== null) { A.text.value = f.text; reportFixes('reader', 'Reader input', f.fixes); renderReader(); } };
+  $('copyFmtBtn').onclick = (e) => { const f = formatText(A.text.value); if (f !== null) { reportFixes('reader', 'Reader input', f.fixes); copyText(f.text, e.currentTarget); } };
   $('minifyBtn').onclick = () => { if (A.value !== undefined) A.text.value = JSON.stringify(A.value); };
   $('sampleBtn').onclick = () => { A.text.value = JSON.stringify(SAMPLE, null, 2); renderReader(); };
   $('clearBtn').onclick = () => { A.text.value = ''; A.selected = null; renderReader(); };
@@ -252,12 +263,14 @@
   // ===== Compare =====
   const L = $('inputL'), R = $('inputR'), state = { blocks: [], cur: -1 };
   // Format a side the same way the Reader's Format button does, when it is valid JSON.
-  function autoFormat(side) {
+  function autoFormat(side, key, label) {
     const f = formatText(side.value);
-    if (f !== null && side.value !== f) side.value = f;
+    if (f === null) return;
+    if (side.value !== f.text) side.value = f.text;
+    reportFixes(key, label, f.fixes);
   }
   function compare() {
-    autoFormat(L); autoFormat(R);
+    autoFormat(L, 'left', 'Left JSON'); autoFormat(R, 'right', 'Right JSON');
     const l = parse(L.value), r = parse(R.value);
     setStatus($('errL'), l); setStatus($('errR'), r);
     if (l.error || r.error || l.empty || r.empty) { $('diffOut').innerHTML = `<p class="muted" style="padding:12px">${l.error || r.error ? 'Fix the JSON error above first.' : 'Both sides are required.'}</p>`; $('diffSummary').textContent = ''; return; }
@@ -279,7 +292,10 @@
   // Format both text boxes (sorting lists after formatting if requested), then refresh the diff.
   // Invalid or empty sides are left as typed.
   function applyToBoth(sort) {
-    [L, R].forEach(side => { const f = formatText(side.value, sort); if (f !== null) side.value = f; });
+    [[L, 'left', 'Left JSON'], [R, 'right', 'Right JSON']].forEach(([side, key, label]) => {
+      const f = formatText(side.value, sort);
+      if (f !== null) { side.value = f.text; reportFixes(key, label, f.fixes); }
+    });
     compare();
   }
   $('fmtBothBtn').onclick = () => applyToBoth(false);
