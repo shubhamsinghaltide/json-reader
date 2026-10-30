@@ -42,6 +42,11 @@ const JsonRepair = (function () {
         }
         // single-quoted strings only end at a quote that is followed by a separator, so apostrophes inside stay put
         if (isClose(ch, kind) && (kind !== 'sq' || at(TAIL, j + 1))) return { json: out + '"', end: j + 1 };
+        // a line break followed by a quote or a closing bracket means the closing quote was forgotten
+        if ((ch === '\n' || ch === '\r') && /^\s*(?:["“”'‘’}\]])/.test(src.slice(j + 1, j + 80))) {
+          fix('Added missing closing quote at end of line', j);
+          return { json: out.replace(/\s+$/, '') + '"', end: j };
+        }
         if (ch < ' ') {
           if (!reported) fix('Escaped raw line break or control character in string', j);
           reported = true;
@@ -54,7 +59,7 @@ const JsonRepair = (function () {
       return { json: out + '"', end: n };
     }
 
-    const out = [], stack = [];
+    const out = [], stack = [], quoteSwaps = {};
     let state = 'value'; // value | start | afterComma | afterValue | colon | done
     const inObj = () => stack[stack.length - 1] === '{';
     const expectsKey = () => inObj() && (state === 'start' || state === 'afterComma');
@@ -102,6 +107,7 @@ const JsonRepair = (function () {
       if (QUOTES[c]) {
         if (!beginItem(i)) return null;
         const key = expectsKey();
+        if (c !== '"') { (quoteSwaps[QUOTES[c]] = quoteSwaps[QUOTES[c]] || { count: 0, pos: i }).count++; }
         const s = readString(i);
         out.push(s.json); i = s.end;
         if (key) state = 'colon'; else endValue();
@@ -129,6 +135,10 @@ const JsonRepair = (function () {
     while (stack.length) if (!close(n, true)) return null;
     const text = out.join('');
     try { JSON.parse(text); } catch (e) { return null; }
+    // quote swaps are reported once per quote style (with the first place and a count), not once per string
+    const LABEL = { sm: 'curly quotes', sq: 'single quotes' };
+    Object.keys(quoteSwaps).forEach(k => fix(`Replaced ${quoteSwaps[k].count} pair${quoteSwaps[k].count > 1 ? 's' : ''} of ${LABEL[k]} with straight double quotes (first one here)`, quoteSwaps[k].pos));
+    fixes.sort((a, b) => a.line - b.line || a.col - b.col);
     return { text, fixes };
   }
 

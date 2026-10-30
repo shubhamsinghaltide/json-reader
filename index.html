@@ -26,6 +26,7 @@
       <div class="actions">
         <label class="btn">Open file<input type="file" id="fileA" accept=".json,.txt,application/json" hidden></label>
         <label class="chk" title="For network responses shaped {data, links, meta}: show only the data object"><input type="checkbox" id="unwrapData"> data only</label>
+        <button class="btn" id="fixBtn" title="Auto-correct the JSON and list what was fixed">Fix JSON</button>
         <button class="btn" id="formatBtn">Format</button>
         <button class="btn" id="copyFmtBtn" title="Copy the formatted JSON to the clipboard">Copy formatted</button>
         <button class="btn" id="minifyBtn">Minify</button>
@@ -115,20 +116,17 @@
   </section>
 </main>
 
-<div id="toasts" class="toasts" aria-live="polite"></div>
-<template id="toastTpl">
-  <div class="toast" role="status">
-    <div class="toast-head"><b class="toast-title"></b><button class="toast-close" title="Close" aria-label="Close">×</button></div>
-    <ul class="toast-list"></ul>
-  </div>
-</template>
+<dialog id="fixDialog" class="fixdlg" aria-labelledby="fixTitle">
+  <h3 id="fixTitle">JSON auto-corrected</h3>
+  <div id="fixBody"></div>
+  <div class="fixdlg-actions"><button class="btn primary" id="fixOk">OK</button></div>
+</dialog>
 
 <script src="js/insights.js"></script>
 <script src="js/tree.js"></script>
 <script src="js/uniclient.js"></script>
 <script src="js/diff.js"></script>
 <script src="js/repair.js"></script>
-<script src="js/toast.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -114,11 +114,31 @@
     if (r.value === undefined) return null;
     return { text: JSON.stringify(sort ? JsonDiff.sortLists(r.value) : r.value, null, 2), fixes: r.fixes };
   }
-  // One persistent toast per panel listing what was auto-corrected and where. It is only closed by its own close button.
+  // Popup listing auto-corrected fixes per panel. It opens when a panel's fixes change and closes only with OK.
+  // OK clears the stored fixes, so the same broken input can report again later.
+  const fixReports = {}, fixDlg = $('fixDialog');
   function reportFixes(key, label, fixes) {
     if (!fixes || !fixes.length) return;
-    Toast.show(key, `Auto-corrected ${fixes.length} issue${fixes.length > 1 ? 's' : ''} in ${label}`, fixes.map(f => `Line ${f.line}, col ${f.col}: ${f.message}`));
+    const sig = JSON.stringify(fixes);
+    if (!fixReports[key] || fixReports[key].sig !== sig) {
+      fixReports[key] = { label, fixes, sig };
+      renderFixes();
+    }
+    // reopen even when the fixes are unchanged, e.g. after the user closed the popup with Escape
+    if (!fixDlg.open) fixDlg.showModal();
   }
+  function renderFixes() {
+    const body = $('fixBody');
+    body.textContent = '';
+    Object.values(fixReports).forEach(({ label, fixes }) => {
+      const h = document.createElement('h4');
+      h.textContent = `${label}: ${fixes.length} issue${fixes.length > 1 ? 's' : ''} fixed`;
+      const ul = document.createElement('ul');
+      fixes.forEach(f => { const li = document.createElement('li'); li.textContent = `Line ${f.line}, col ${f.col}: ${f.message}`; ul.append(li); });
+      body.append(h, ul);
+    });
+  }
+  $('fixOk').onclick = () => { for (const k in fixReports) delete fixReports[k]; fixDlg.close(); };
   function envelopeHtml(env) {
     const h = env.headers || {};
     const pick = ['content-type', 'content-length', 'cache-control', 'x-rate-limit-remaining', 'x-rate-limit-limit', 'x-gravitee-request-id'];
@@ -246,6 +266,13 @@
   let tmr; A.text.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(renderReader, 250); });
   $('search').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(draw, 200); });
   $('unwrapData').onchange = renderReader;
+  $('fixBtn').onclick = () => {
+    const f = formatText(A.text.value);
+    if (f === null) return; // empty or unrepairable: the status line already shows the parse error
+    A.text.value = f.text;
+    reportFixes('reader', 'Reader input', f.fixes);
+    renderReader();
+  };
   $('formatBtn').onclick = () => { const f = formatText(A.text.value); if (f !== null) { A.text.value = f.text; reportFixes('reader', 'Reader input', f.fixes); renderReader(); } };
   $('copyFmtBtn').onclick = (e) => { const f = formatText(A.text.value); if (f !== null) { reportFixes('reader', 'Reader input', f.fixes); copyText(f.text, e.currentTarget); } };
   $('minifyBtn').onclick = () => { if (A.value !== undefined) A.text.value = JSON.stringify(A.value); };
