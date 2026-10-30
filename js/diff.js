@@ -6,6 +6,34 @@
     return v;
   }
 
+  // Total order over JSON values: type first, then content.
+  // Objects compare key by key in alphabetical order: the key name first, then its value.
+  const rank = (v) => v === null ? 0 : typeof v === 'boolean' ? 1 : typeof v === 'number' ? 2 : typeof v === 'string' ? 3 : Array.isArray(v) ? 4 : 5;
+  function cmpValue(a, b) {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    if (ra === 4) {
+      for (let i = 0; i < Math.min(a.length, b.length); i++) { const c = cmpValue(a[i], b[i]); if (c) return c; }
+      return a.length - b.length;
+    }
+    if (ra === 5) {
+      const ka = Object.keys(a).sort(), kb = Object.keys(b).sort();
+      for (let i = 0; i < Math.min(ka.length, kb.length); i++) {
+        if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+        const c = cmpValue(a[ka[i]], b[kb[i]]); if (c) return c;
+      }
+      return ka.length - kb.length;
+    }
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  // Sorts every array (recursively) into alphabetical key/value order so list item order does not affect the diff.
+  // Object keys are also sorted, so items with the same content but different key order line up.
+  function sortLists(v) {
+    if (Array.isArray(v)) return v.map(sortLists).sort(cmpValue);
+    if (v && typeof v === 'object') { const o = {}; Object.keys(v).sort().forEach(k => o[k] = sortLists(v[k])); return o; }
+    return v;
+  }
+
   // Returns ops: [{t:'eq'|'del'|'add', a?:idx, b?:idx}]
   function diffSeq(A, B) {
     let s = 0;
@@ -106,5 +134,5 @@
     return { stats, blocks };
   }
 
-  g.JsonDiff = { render, sortKeys, buildRows };
+  g.JsonDiff = { render, sortKeys, sortLists, buildRows };
 })(window);

@@ -27,6 +27,7 @@
         <label class="btn">Open file<input type="file" id="fileA" accept=".json,.txt,application/json" hidden></label>
         <label class="chk" title="For network responses shaped {data, links, meta}: show only the data object"><input type="checkbox" id="unwrapData"> data only</label>
         <button class="btn" id="formatBtn">Format</button>
+        <button class="btn" id="copyFmtBtn" title="Copy the formatted JSON to the clipboard">Copy formatted</button>
         <button class="btn" id="minifyBtn">Minify</button>
         <button class="btn" id="sampleBtn">Sample</button>
         <button class="btn" id="clearBtn">Clear</button>
@@ -75,7 +76,10 @@
       <h2>Compare two JSON documents</h2>
       <div class="actions">
         <label class="chk"><input type="checkbox" id="optSort"> Ignore key order</label>
+        <label class="chk" title="Sort every list so item order does not matter"><input type="checkbox" id="optListSort"> Ignore list order</label>
         <label class="chk"><input type="checkbox" id="optChangedOnly"> Changed lines only</label>
+        <button class="btn" id="fmtBothBtn" title="Format both JSON documents">Format both</button>
+        <button class="btn" id="sortBothBtn" title="Sort every list in both JSON documents">Sort lists both</button>
         <button class="btn primary" id="diffBtn">Compare</button>
         <button class="btn" id="swapBtn">Swap</button>
         <button class="btn icon expand" data-expand="panelCmpIn" title="Expand to full width">⤢</button>

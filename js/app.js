@@ -83,7 +83,7 @@
   }
   const bodyOnly = () => $('unwrapData') && $('unwrapData').checked;
 
-  function parse(text) {
+  function parse(text, opts = {}) {
     let t = text.trim();
     if (!t) return { empty: true };
     let envelope = null;
@@ -94,7 +94,7 @@
     if (!t) return { error: 'Network response has an empty BODY', envelope };
     try {
       let value = JSON.parse(t);
-      if (envelope && bodyOnly() && value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) value = value.data;
+      if (envelope && opts.unwrap !== false && bodyOnly() && value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) value = value.data;
       return { value, envelope };
     }
     catch (e) {
@@ -102,6 +102,13 @@
       if (m && !/line \d+/.test(msg)) { const pos = +m[1], before = t.slice(0, pos).split('\n'); msg += ` (line ${before.length}, col ${before[before.length - 1].length + 1})`; }
       return { error: msg, envelope };
     }
+  }
+  // Pretty-printed JSON as the Reader's Format button produces it. Accepts raw JSON or a network dump (uses its BODY).
+  // Ignores the data-only option so the whole document is kept. Optionally sorts lists first. Returns null if invalid or empty.
+  function formatText(text, sort = false) {
+    const r = parse(text, { unwrap: false });
+    if (r.value === undefined) return null;
+    return JSON.stringify(sort ? JsonDiff.sortLists(r.value) : r.value, null, 2);
   }
   function envelopeHtml(env) {
     const h = env.headers || {};
@@ -128,6 +135,11 @@
   function setStatus(el, r, extra) {
     el.className = 'status' + (r.error ? ' err' : r.value !== undefined ? ' ok' : '');
     el.textContent = r.error ? r.error : r.empty ? '' : 'Valid JSON' + (extra || '');
+  }
+  function copyText(txt, b) {
+    const done = () => { const old = b.textContent; b.textContent = 'copied'; b.classList.add('ok'); setTimeout(() => { b.textContent = old; b.classList.remove('ok'); }, 900); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, done);
+    else { const t = document.createElement('textarea'); t.value = txt; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); done(); }
   }
   function readFile(input, target, cb) {
     input.onchange = () => { const f = input.files[0]; if (!f) return; f.text().then(t => { target.value = t; input.value = ''; cb(); }); };
@@ -170,7 +182,13 @@
       bar.querySelector('#dartRoot').oninput = gen;
       bar.querySelector('#dartCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(pre.textContent);
     }
-    else TreeView.renderRaw(A.value, host, o);
+    else {
+      TreeView.renderRaw(A.value, host, o);
+      const bar = document.createElement('div'); bar.className = 'dnav';
+      bar.innerHTML = '<button class="btn small" id="rawCopy">Copy</button>';
+      bar.querySelector('#rawCopy').onclick = (e) => copyText(JSON.stringify(A.value, null, 2), e.currentTarget);
+      host.prepend(bar);
+    }
     A.expandAll = false;
   }
   // expand ancestors of a path in the tree and highlight the row
@@ -217,7 +235,8 @@
   let tmr; A.text.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(renderReader, 250); });
   $('search').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(draw, 200); });
   $('unwrapData').onchange = renderReader;
-  $('formatBtn').onclick = () => { if (A.value !== undefined) A.text.value = JSON.stringify(A.value, null, 2); };
+  $('formatBtn').onclick = () => { const f = formatText(A.text.value); if (f !== null) { A.text.value = f; renderReader(); } };
+  $('copyFmtBtn').onclick = (e) => { const f = formatText(A.text.value); if (f !== null) copyText(f, e.currentTarget); };
   $('minifyBtn').onclick = () => { if (A.value !== undefined) A.text.value = JSON.stringify(A.value); };
   $('sampleBtn').onclick = () => { A.text.value = JSON.stringify(SAMPLE, null, 2); renderReader(); };
   $('clearBtn').onclick = () => { A.text.value = ''; A.selected = null; renderReader(); };
@@ -232,12 +251,19 @@
 
   // ===== Compare =====
   const L = $('inputL'), R = $('inputR'), state = { blocks: [], cur: -1 };
+  // Format a side the same way the Reader's Format button does, when it is valid JSON.
+  function autoFormat(side) {
+    const f = formatText(side.value);
+    if (f !== null && side.value !== f) side.value = f;
+  }
   function compare() {
+    autoFormat(L); autoFormat(R);
     const l = parse(L.value), r = parse(R.value);
     setStatus($('errL'), l); setStatus($('errR'), r);
     if (l.error || r.error || l.empty || r.empty) { $('diffOut').innerHTML = `<p class="muted" style="padding:12px">${l.error || r.error ? 'Fix the JSON error above first.' : 'Both sides are required.'}</p>`; $('diffSummary').textContent = ''; return; }
     let lv = l.value, rv = r.value;
     if ($('optSort').checked) { lv = JsonDiff.sortKeys(lv); rv = JsonDiff.sortKeys(rv); }
+    if ($('optListSort').checked) { lv = JsonDiff.sortLists(lv); rv = JsonDiff.sortLists(rv); }
     const res = JsonDiff.render(JSON.stringify(lv, null, 2), JSON.stringify(rv, null, 2), $('diffOut'), { changedOnly: $('optChangedOnly').checked });
     const s = res.stats;
     $('diffSummary').innerHTML = (s.add + s.del + s.chg) ? `<span class="a">+${s.add} added</span> · <span class="d">−${s.del} removed</span> · <span class="c">~${s.chg} modified</span> · ${res.blocks.length} change block(s)` : 'identical';
@@ -250,8 +276,16 @@
     state.cur = (state.cur + dir + state.blocks.length) % state.blocks.length;
     const b = state.blocks[state.cur]; b.classList.add('cur'); b.scrollIntoView({ block: 'center' });
   }
+  // Format both text boxes (sorting lists after formatting if requested), then refresh the diff.
+  // Invalid or empty sides are left as typed.
+  function applyToBoth(sort) {
+    [L, R].forEach(side => { const f = formatText(side.value, sort); if (f !== null) side.value = f; });
+    compare();
+  }
+  $('fmtBothBtn').onclick = () => applyToBoth(false);
+  $('sortBothBtn').onclick = () => applyToBoth(true);
   $('diffBtn').onclick = compare;
-  $('optSort').onchange = $('optChangedOnly').onchange = () => { if (L.value.trim() && R.value.trim()) compare(); };
+  $('optSort').onchange = $('optListSort').onchange = $('optChangedOnly').onchange = () => { if (L.value.trim() && R.value.trim()) compare(); };
   $('prevDiff').onclick = () => jump(-1);
   $('nextDiff').onclick = () => jump(1);
   $('swapBtn').onclick = () => { const t = L.value; L.value = R.value; R.value = t; compare(); };
